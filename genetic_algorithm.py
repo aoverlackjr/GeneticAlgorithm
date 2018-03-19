@@ -1,4 +1,4 @@
-from random import random as rand
+import numpy as np
 
 class GeneticAlgorithm(object):
     '''
@@ -12,7 +12,7 @@ class GeneticAlgorithm(object):
     2) A first population of (random) individuals is created.
     3) The population is basically a list of genes, that can be accessed externally.
     4) In the main application, these genes are interpreted in the application-specific way. (Gene-to-modelparameters)
-    5) In the main application a fitness number is assigned after simulation/assesment of the individual's perfomance.
+    5) In the main application a fitness number is assigned after simulation/assesment of the individual's performance.
     6) The main application calls this object's cycle function after all individuals have been assessed, leading to a new (non-random) population.
     7) Step 4 and 5 are repeated until an individual is found that meets certain criteria.
     '''
@@ -27,7 +27,8 @@ class GeneticAlgorithm(object):
                  elitism = True,                        # Elitism enables the fittest individual to go through to the next generation unaltered.
                  mode = 'digital',                      # digital / float encoding of the gene. Choice is application specific.
                  float_bias = 0.0,                      # The starting bias of the floats in the gene.
-                 float_range = 1.0):                    # The starting range of the float size.
+                 float_range = 1.0,                     # The starting range of the float size.
+                 nr_of_crossovers = 1):                 # The amount of crossover points when crossing over.
 
         self.crossover_rate            = crossover_rate
         self.mutation_rate             = mutation_rate
@@ -39,6 +40,7 @@ class GeneticAlgorithm(object):
         self.elitism                   = elitism
         self.float_range               = float_range
         self.float_bias                = float_bias
+        self.nr_of_crossovers          = nr_of_crossovers
 
         # If the mode is set to float, a single nr is a gene.
         if mode == 'float' and gene_length > 1:
@@ -47,6 +49,8 @@ class GeneticAlgorithm(object):
         # Safeguard for wrong input.
         if mode != 'float' and mode != 'digital':
             mode = 'digital'
+    
+        self.nr_of_bits = self.gene_length*self.nr_of_genes
 
         # Set the mode, generation counter and init first population.
         self.mode                      = mode
@@ -70,8 +74,8 @@ class GeneticAlgorithm(object):
         # generation at a random index of the population.
         if self.elitism:
             elite1, elite2 = self._findFittestPair()
-            rand_index1 = int(rand()*self.pop_size)
-            rand_index2 = int(rand()*self.pop_size)
+            rand_index1 = int(np.random.rand()*self.pop_size)
+            rand_index2 = int(np.random.rand()*self.pop_size)
             newGeneration.individuals[rand_index1] = elite1
             newGeneration.individuals[rand_index2] = elite2
         self.history.append(newGeneration)
@@ -129,18 +133,14 @@ class GeneticAlgorithm(object):
     def _crossOver(self, chromo1, chromo2):
         # The cross-over function takes two individuals (chromosomes) and mates them
         # according to a stochastical index.
-        # Currently only one cross-over is implemented, multi cross-over# is to be implemented.
-        offspring1 = []
-        offspring2 = []
-        if rand() < self.crossover_rate:
-            index = int(rand()*len(chromo1))
-            offspring1.extend(chromo1[0:index])
-            offspring1.extend(chromo2[index:])
-            offspring2.extend(chromo2[0:index])
-            offspring2.extend(chromo1[index:])
-        else:
-            offspring1 = list(chromo1)
-            offspring2 = list(chromo2)
+        offspring1 = list(chromo1)
+        offspring2 = list(chromo2)
+        if np.random.rand() < self.crossover_rate:
+            random_indices, switches = self._generateRandomIndices(self.nr_of_crossovers, self.nr_of_bits)
+            for i in range(self.nr_of_bits):
+                if switches[i]:
+                    offspring1[i] = chromo2[i]
+                    offspring2[i] = chromo1[i]
         return offspring1, offspring2
 
     def _mutateChromosome(self, chromo_in):
@@ -148,15 +148,15 @@ class GeneticAlgorithm(object):
         chromo_out = list(chromo_in)
         if self.mode == 'digital':
             for i in range(len(chromo_in)):
-                if rand() < self.mutation_rate:
+                if np.random.rand() < self.mutation_rate:
                     if chromo_in[i] == 1:
                         chromo_out[i] = 0
                     elif chromo_in[i] == 0:
                         chromo_out[i] = 1
         elif self.mode == 'float':
             for i in range(len(chromo_in)):
-                if rand() < self.mutation_rate:
-                    chromo_out[i] = chromo_in[i] + (rand()-rand())*self.max_mutation_perturbation
+                if np.random.rand() < self.mutation_rate:
+                    chromo_out[i] = chromo_in[i] + (np.random.rand()-np.random.rand())*self.max_mutation_perturbation
         return chromo_out
 
     def _mate(self,chromo1,chromo2):
@@ -178,31 +178,45 @@ class GeneticAlgorithm(object):
         # A function to select individuals in a generation fro the mating process.
         # The selection is done according to the fitness and a stochastic parameter.
         total_fitness = sum(self.history[self.generation_nr].fitness)
-        slider = rand()*total_fitness
+        slider = np.random.rand()*total_fitness
         cumulative_fitness = 0.0
+        found_chromo = False
         for chrNr in range(self.pop_size):
             cumulative_fitness += self.history[self.generation_nr].fitness[chrNr]
             if cumulative_fitness >= slider:
                 chromo = list(self.history[self.generation_nr].individuals[chrNr])
+                found_chromo = True
                 break
-        return chromo
+        if found_chromo:
+            return chromo
+        else:
+            raise Exception("Could not find chromosome in roulette.")
 
     def _generateRandomFloats(self, length, max_range, bias):
         # Helper for the initialization of the first generation.
         rand_floats = []
         for i in range(length):
-            rand_floats.append( (rand() - rand() ) * float(max_range) + float(bias))
+            rand_floats.append( (np.random.rand() - np.random.rand() ) * float(max_range) + float(bias))
         return rand_floats
 
     def _generateRandomByte(self, length):
         # Helper for the initialization of the first generation.
-        rand_byte = []
-        for i in range(length):
-            bit = 0
-            if rand() > 0.5:
-                bit = 1
-            rand_byte.append(bit)
-        return rand_byte
+        return np.random.randint(0,1,length)
+        
+    def _generateRandomIndices(self, nr_of_indices, max_index):
+        random_indices = np.unique(np.sort(np.random.randint(1, max_index, nr_of_indices)))
+        switch_array = np.array([True]*max_index)
+        switch = True
+        for i in range(max_index):
+            if i in random_indices:
+                switch = not switch
+            switch_array[i] = switch
+        return random_indices, switch_array
+        
+    def individuals(self):
+        for individualNr in range(self.pop_size):
+            yield self.individual(individualNr), individualNr
+        
 
 class Generation(object):
 
