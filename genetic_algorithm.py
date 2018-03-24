@@ -23,24 +23,28 @@ class GeneticAlgorithm(object):
                  gene_length = 4,                       # The length of the gene. If digital, this is the number of bits encoding one gene.
                  nr_of_genes = 75,                      # The number of genes in an individuals chromosome.
                  max_generations = 400,                 # A placeholder cap of simulation duration (or: cycles). Does not have to be used.
-                 max_mutation_perturbation = 0.3,       # In case the gene is encoded as a float, the mutation is also a float with a maximum perturbation.
+                 sigma_mutation_perturbation = 0.3,     # In case the gene is encoded as a float, the mutation is also a float with a maximum perturbation.
                  elitism = True,                        # Elitism enables the fittest individual to go through to the next generation unaltered.
                  mode = 'digital',                      # digital / float encoding of the gene. Choice is application specific.
                  float_bias = 0.0,                      # The starting bias of the floats in the gene.
                  float_range = 1.0,                     # The starting range of the float size.
-                 nr_of_crossovers = 1):                 # The amount of crossover points when crossing over.
+                 nr_of_crossovers = 1,                  # The amount of crossover points when crossing over.
+                 crossover_mode = 'fixed',              # Whether fixed or uniform crossover is used
+                 progenitor = None):                    # The seed chromo, if any
 
-        self.crossover_rate            = crossover_rate
-        self.mutation_rate             = mutation_rate
-        self.pop_size                  = pop_size
-        self.gene_length               = gene_length
-        self.nr_of_genes               = nr_of_genes
-        self.max_generations           = max_generations
-        self.max_mutation_perturbation = max_mutation_perturbation
-        self.elitism                   = elitism
-        self.float_range               = float_range
-        self.float_bias                = float_bias
-        self.nr_of_crossovers          = nr_of_crossovers
+        self.crossover_rate              = crossover_rate
+        self.mutation_rate               = mutation_rate
+        self.pop_size                    = pop_size
+        self.gene_length                 = gene_length
+        self.nr_of_genes                 = nr_of_genes
+        self.max_generations             = max_generations
+        self.sigma_mutation_perturbation = sigma_mutation_perturbation
+        self.elitism                     = elitism
+        self.float_range                 = float_range
+        self.float_bias                  = float_bias
+        self.nr_of_crossovers            = nr_of_crossovers
+        self.f_crossOver                 = self._crossOver
+
 
         # If the mode is set to float, a single nr is a gene.
         if mode == 'float' and gene_length > 1:
@@ -49,8 +53,23 @@ class GeneticAlgorithm(object):
         # Safeguard for wrong input.
         if mode != 'float' and mode != 'digital':
             mode = 'digital'
-    
+
+        # set crossover function
+        if crossover_mode == 'fixed':
+            self.f_crossOver = self._crossOver
+        if crossover_mode == 'uniform':
+            self.f_crossOver = self._crossOverUniform
+
         self.nr_of_bits = self.gene_length*self.nr_of_genes
+
+        if self.progenitor:
+            if self.nr_of_bits == len(self.progenitor):
+                self.progenitor = progenitor
+            else:
+                self.progenitor = None
+                print('Progenitor not of compatible length, not seeding...')
+        else:
+            self.progenitor = progenitor
 
         # Set the mode, generation counter and init first population.
         self.mode                      = mode
@@ -128,6 +147,9 @@ class GeneticAlgorithm(object):
         elif self.mode == 'float':
             for individualNr in range(self.pop_size):
                 generation.individuals.append(self._generateRandomFloats(self.nr_of_genes, self.float_range, self.float_bias))
+        # add seed, if any
+        if self.progenitor:
+            generation.individuals[0] = self.progenitor
         self.history.append(generation)
 
     def _crossOver(self, chromo1, chromo2):
@@ -143,6 +165,15 @@ class GeneticAlgorithm(object):
                     offspring2[i] = chromo1[i]
         return offspring1, offspring2
 
+    def _crossOverUniform(self, chromo1, chromo2):
+        offspring1 = list(chromo1)
+        offspring2 = list(chromo2)
+        for i in range(self.nr_of_bits):
+            if np.random.rand() < self.crossover_rate:
+                offspring1[i] = chromo2[i]
+                offspring2[i] = chromo1[i]
+        return offspring1, offspring2
+
     def _mutateChromosome(self, chromo_in):
         # The mutation function implements (random) mutations
         chromo_out = list(chromo_in)
@@ -156,12 +187,12 @@ class GeneticAlgorithm(object):
         elif self.mode == 'float':
             for i in range(len(chromo_in)):
                 if np.random.rand() < self.mutation_rate:
-                    chromo_out[i] = chromo_in[i] + (np.random.rand()-np.random.rand())*self.max_mutation_perturbation
+                    chromo_out[i] = chromo_in[i] + np.random.randn()*self.sigma_mutation_perturbation
         return chromo_out
 
     def _mate(self,chromo1,chromo2):
         # The mate function wraps the cross-over and mutation actions.
-        offspring1, offspring2 = self._crossOver(chromo1,chromo2)
+        offspring1, offspring2 = self.f_crossOver(chromo1,chromo2)
         offspring1 = self._mutateChromosome(offspring1)
         offspring2 = self._mutateChromosome(offspring2)
         return offspring1, offspring2
@@ -202,7 +233,7 @@ class GeneticAlgorithm(object):
     def _generateRandomByte(self, length):
         # Helper for the initialization of the first generation.
         return np.random.randint(0,1,length)
-        
+
     def _generateRandomIndices(self, nr_of_indices, max_index):
         random_indices = np.unique(np.sort(np.random.randint(1, max_index, nr_of_indices)))
         switch_array = np.array([True]*max_index)
@@ -212,11 +243,16 @@ class GeneticAlgorithm(object):
                 switch = not switch
             switch_array[i] = switch
         return random_indices, switch_array
-        
+
     def individuals(self):
         for individualNr in range(self.pop_size):
             yield self.individual(individualNr), individualNr
-        
+
+    def save_chromo_to_file(self, chromo, filename):
+        with open(file_name, 'a') as f:
+            f.write('\n')
+            f.write(str(chromo)+'\n')
+
 
 class Generation(object):
 
