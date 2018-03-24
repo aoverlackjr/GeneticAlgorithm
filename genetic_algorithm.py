@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 class GeneticAlgorithm(object):
     '''
@@ -62,14 +63,14 @@ class GeneticAlgorithm(object):
 
         self.nr_of_bits = self.gene_length*self.nr_of_genes
 
-        if self.progenitor:
-            if self.nr_of_bits == len(self.progenitor):
+        if progenitor:
+            if self.nr_of_bits == len(progenitor):
                 self.progenitor = progenitor
             else:
                 self.progenitor = None
                 print('Progenitor not of compatible length, not seeding...')
         else:
-            self.progenitor = progenitor
+            self.progenitor = None
 
         # Set the mode, generation counter and init first population.
         self.mode                      = mode
@@ -225,10 +226,7 @@ class GeneticAlgorithm(object):
 
     def _generateRandomFloats(self, length, max_range, bias):
         # Helper for the initialization of the first generation.
-        rand_floats = []
-        for i in range(length):
-            rand_floats.append( (np.random.rand() - np.random.rand() ) * float(max_range) + float(bias))
-        return rand_floats
+        return np.random.randn(length) * float(max_range) + float(bias)
 
     def _generateRandomByte(self, length):
         # Helper for the initialization of the first generation.
@@ -248,9 +246,10 @@ class GeneticAlgorithm(object):
         for individualNr in range(self.pop_size):
             yield self.individual(individualNr), individualNr
 
-    def save_chromo_to_file(self, chromo, filename):
+    def save_chromo_to_file(self, chromo, chromo_name, file_name):
         with open(file_name, 'a') as f:
             f.write('\n')
+            f.write(chromo_name + ' = ')
             f.write(str(chromo)+'\n')
 
 
