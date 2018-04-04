@@ -1,5 +1,7 @@
 import numpy as np
 import os
+from copy import deepcopy as clone
+from random import sample
 
 class GeneticAlgorithm(object):
     '''
@@ -94,10 +96,9 @@ class GeneticAlgorithm(object):
         # generation at a random index of the population.
         if self.elitism:
             elite1, elite2 = self._findFittestPair()
-            rand_index1 = int(np.random.rand()*self.pop_size)
-            rand_index2 = int(np.random.rand()*self.pop_size)
-            newGeneration.individuals[rand_index1] = elite1
-            newGeneration.individuals[rand_index2] = elite2
+            indices = sample(range(0,self.pop_size),2)
+            newGeneration.individuals[indices[0]] = elite1
+            newGeneration.individuals[indices[1]] = elite2
         self.history.append(newGeneration)
         self.generation_nr += 1
 
@@ -123,7 +124,7 @@ class GeneticAlgorithm(object):
                 generation_index = gen
                 individual_index = ind
             gen += 1
-        chromo = list(self.history[generation_index].individuals[individual_index])
+        chromo = clone(self.history[generation_index].individuals[individual_index])
         fitness = self.history[generation_index].fitness[individual_index]
         return chromo, fitness, generation_index, individual_index
 
@@ -156,8 +157,8 @@ class GeneticAlgorithm(object):
     def _crossOver(self, chromo1, chromo2):
         # The cross-over function takes two individuals (chromosomes) and mates them
         # according to a stochastical index.
-        offspring1 = list(chromo1)
-        offspring2 = list(chromo2)
+        offspring1 = clone(chromo1)
+        offspring2 = clone(chromo2)
         if np.random.rand() < self.crossover_rate:
             random_indices, switches = self._generateRandomIndices(self.nr_of_crossovers, self.nr_of_bits)
             for i in range(self.nr_of_bits):
@@ -167,8 +168,8 @@ class GeneticAlgorithm(object):
         return offspring1, offspring2
 
     def _crossOverUniform(self, chromo1, chromo2):
-        offspring1 = list(chromo1)
-        offspring2 = list(chromo2)
+        offspring1 = clone(chromo1)
+        offspring2 = clone(chromo2)
         for i in range(self.nr_of_bits):
             if np.random.rand() < self.crossover_rate:
                 offspring1[i] = chromo2[i]
@@ -177,7 +178,7 @@ class GeneticAlgorithm(object):
 
     def _mutateChromosome(self, chromo_in):
         # The mutation function implements (random) mutations
-        chromo_out = list(chromo_in)
+        chromo_out = clone(chromo_in)
         if self.mode == 'digital':
             for i in range(len(chromo_in)):
                 if np.random.rand() < self.mutation_rate:
@@ -200,11 +201,11 @@ class GeneticAlgorithm(object):
 
     def _findFittestPair(self):
         # Find the fittest pair, helper function for elitism.
-        fitness_copy = list(self.history[self.generation_nr].fitness)
+        fitness_copy = clone(self.history[self.generation_nr].fitness)
         index1 = fitness_copy.index(max(fitness_copy))
         fitness_copy[index1] = 0.0
         index2 = fitness_copy.index(max(fitness_copy))
-        return self.history[self.generation_nr].individuals[index1], self.history[self.generation_nr].individuals[index2]
+        return clone(self.history[self.generation_nr].individuals[index1]), clone(self.history[self.generation_nr].individuals[index2])
 
     def _roulette(self):
         # A function to select individuals in a generation fro the mating process.
@@ -216,7 +217,7 @@ class GeneticAlgorithm(object):
         for chrNr in range(self.pop_size):
             cumulative_fitness += self.history[self.generation_nr].fitness[chrNr]
             if cumulative_fitness >= slider:
-                chromo = list(self.history[self.generation_nr].individuals[chrNr])
+                chromo = clone(self.history[self.generation_nr].individuals[chrNr])
                 found_chromo = True
                 break
         if found_chromo:
@@ -246,11 +247,14 @@ class GeneticAlgorithm(object):
         for individualNr in range(self.pop_size):
             yield self.individual(individualNr), individualNr
 
-    def save_chromo_to_file(self, chromo, chromo_name, file_name):
-        with open(file_name, 'a') as f:
+    def save_chromo_to_file(self, chromo, chromo_name, file_name, overwrite = False):
+        option = 'a'
+        if overwrite:
+            option = 'w'
+        with open(file_name, option) as f:
             f.write('\n')
             f.write(chromo_name + ' = ')
-            f.write(str(chromo)+'\n')
+            f.write(str(list(chromo))+'\n')
 
 
 class Generation(object):
