@@ -2,6 +2,7 @@ import numpy as np
 import os
 from copy import deepcopy as clone
 from random import sample
+from math import sqrt, ceil
 
 class GeneticAlgorithm(object):
     '''
@@ -33,7 +34,8 @@ class GeneticAlgorithm(object):
                  float_range = 1.0,                     # The starting range of the float size.
                  nr_of_crossovers = 1,                  # The amount of crossover points when crossing over.
                  crossover_mode = 'fixed',              # Whether fixed or uniform crossover is used
-                 progenitor = None):                    # The seed chromo, if any
+                 progenitor = None,                     # The seed chromo, if any
+                 roulette_mode = 'fitness'):            # The choice of roulette (fitness or rank)
 
         self.crossover_rate              = crossover_rate
         self.mutation_rate               = mutation_rate
@@ -47,6 +49,9 @@ class GeneticAlgorithm(object):
         self.float_bias                  = float_bias
         self.nr_of_crossovers            = nr_of_crossovers
         self.f_crossOver                 = self._crossOver
+        modes                            = {'fitness' : self._fitness_roulette, 
+                                            'rank'    : self._rank_roulette}
+        self.f_roulette                  = modes[roulette_mode]
 
 
         # If the mode is set to float, a single nr is a gene.
@@ -208,6 +213,19 @@ class GeneticAlgorithm(object):
         return clone(self.history[self.generation_nr].individuals[index1]), clone(self.history[self.generation_nr].individuals[index2])
 
     def _roulette(self):
+        return self.f_roulette()
+        
+    def _rank_roulette(self):
+        total_rank = 0.5*(self.pop_size**2 + self.pop_size)
+        sorted_chromos, sorted_fitness = self.history[self.generation_nr].sort_by_rank()
+        slider = np.random.rand()*total_rank
+        cumulative_rank = 0.0
+        # solve quadratic equation to equate the slider to an index of the rank-sorted generation
+        n = ceil((-1.0 + sqrt(1.0 + 8.0*slider))/2.0)-1
+        chromo = clone(sorted_chromos[n])
+        return chromo
+        
+    def _fitness_roulette(self):
         # A function to select individuals in a generation fro the mating process.
         # The selection is done according to the fitness and a stochastic parameter.
         total_fitness = sum(self.history[self.generation_nr].fitness)
@@ -267,3 +285,18 @@ class Generation(object):
         self.fitness = []
         for i in range(size):
             self.fitness.append(0.0)
+            
+    def iterator(self):
+        for i,f in zip(self.individuals, self.fitness):
+            yield i, f
+            
+    def sort_by_rank(self):
+        sorted_fitness = []
+        sorted_chromos = []
+        sorted_indices = np.argsort(self.fitness)
+        for i in sorted_indices:
+            sorted_fitness.append(self.fitness[i])
+            sorted_chromos.append(self.individuals[i])
+        return sorted_chromos, sorted_fitness
+        
+    

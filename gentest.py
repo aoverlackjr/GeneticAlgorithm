@@ -24,7 +24,8 @@ GA = GeneticAlgorithm(  crossover_rate              = 0.5,
                         float_range                 = 0.1,
                         nr_of_crossovers            = 3,
                         crossover_mode              = 'uniform',
-                        progenitor                  = None)
+                        progenitor                  = None,
+                        roulette_mode               = 'rank')
 
 # Now, for some arbitrary amount of times we allow a generations to attack the problem.
 nr_of_generations = 300
@@ -71,3 +72,4 @@ GA.save_chromo_to_file(chromo, 'best_one_yet', 'cb.py', overwrite = True)
 # Varying the input argument to the GA constructor will show different convergence behaviours.
 # Repeated runs with similar parameters will also show that sometimes an acceptable solution is never found
 print(matrix)
+
