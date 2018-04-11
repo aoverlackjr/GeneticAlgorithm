@@ -94,6 +94,12 @@ class GeneticAlgorithm(object):
         for ind in range(0,self.pop_size,2):
             chromo1 = self._roulette()
             chromo2 = self._roulette()
+            # If the same individual is chosen twice, perform this step until 
+            # two different ones are found.
+            if self._is_same_genotype(chromo1, chromo2):
+                while self._is_same_genotype(chromo1, chromo2):
+                    chromo1 = self._roulette()
+                    chromo2 = self._roulette()
             offspring1, offspring2 = self._mate(chromo1,chromo2)
             newGeneration.individuals.append(offspring1)
             newGeneration.individuals.append(offspring2)
@@ -219,9 +225,8 @@ class GeneticAlgorithm(object):
         total_rank = 0.5*(self.pop_size**2 + self.pop_size)
         sorted_chromos, sorted_fitness = self.history[self.generation_nr].sort_by_rank()
         slider = np.random.rand()*total_rank
-        cumulative_rank = 0.0
         # solve quadratic equation to equate the slider to an index of the rank-sorted generation
-        n = ceil((-1.0 + sqrt(1.0 + 8.0*slider))/2.0)-1
+        n = int(ceil((-1.0 + sqrt(1.0 + 8.0*slider))/2.0) - 1)
         chromo = clone(sorted_chromos[n])
         return chromo
         
@@ -242,6 +247,14 @@ class GeneticAlgorithm(object):
             return chromo
         else:
             raise Exception("Could not find chromosome in roulette.")
+            
+    def _is_same_genotype(self, chromo1, chromo2):
+        is_same = True
+        for g1, g2 in zip(chromo1, chromo2):
+            if g1 != g2:
+                is_same = False
+                break
+        return is_same
 
     def _generateRandomFloats(self, length, max_range, bias):
         # Helper for the initialization of the first generation.
@@ -298,5 +311,3 @@ class Generation(object):
             sorted_fitness.append(self.fitness[i])
             sorted_chromos.append(self.individuals[i])
         return sorted_chromos, sorted_fitness
-        
-    
