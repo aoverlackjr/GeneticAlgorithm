@@ -52,6 +52,9 @@ class GeneticAlgorithm(object):
         modes                            = {'fitness' : self._fitness_roulette, 
                                             'rank'    : self._rank_roulette}
         self.f_roulette                  = modes[roulette_mode]
+        
+        self.mean_diversity = []
+        self.mean_deviation = []
 
 
         # If the mode is set to float, a single nr is a gene.
@@ -88,6 +91,12 @@ class GeneticAlgorithm(object):
         # The cycle function is called externally when a population has been suitably assesed for fitness.
         # It takes the current population and their (externally) assigned fitness to create
         # a new population.
+        
+        # keep track of the diversity of the current population:
+        m, sigma = self._get_diversity()
+        self.mean_diversity.append(m)
+        self.mean_deviation.append(sigma)
+        
         # Create a new population;
         newGeneration = Generation(self.pop_size)
         # Select pairs in the population and mate them.
@@ -255,6 +264,26 @@ class GeneticAlgorithm(object):
                 is_same = False
                 break
         return is_same
+        
+    def _get_average_chromosome(self):
+        av_chromo = np.zeros(self.nr_of_genes)
+        for chromo, nr in self.individuals():
+            av_chromo += np.array(chromo)
+        av_chromo = av_chromo/self.pop_size
+        return av_chromo
+        
+    def _get_genetic_distances(self):
+        center_genotype = self._get_average_chromosome()
+        distances = []
+        for chromo, nr in self.individuals():
+            distances.append(np.linalg.norm(np.array(chromo) - np.array(center_genotype)))
+        return distances
+        
+    def _get_diversity(self):
+        deviations = self._get_genetic_distances()
+        mean_deviation = np.mean(deviations)
+        std_deviation  = np.std(deviations)
+        return mean_deviation, std_deviation
 
     def _generateRandomFloats(self, length, max_range, bias):
         # Helper for the initialization of the first generation.
