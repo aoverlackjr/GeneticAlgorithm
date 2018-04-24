@@ -35,7 +35,7 @@ class GeneticAlgorithm(object):
                  nr_of_crossovers = 1,                  # The amount of crossover points when crossing over.
                  crossover_mode = 'fixed',              # Whether fixed or uniform crossover is used
                  progenitor = None,                     # The seed chromo, if any
-                 roulette_mode = 'fitness'):            # The choice of roulette (fitness or rank)
+                 roulette_mode = 'fitness'):
 
         self.crossover_rate              = crossover_rate
         self.mutation_rate               = mutation_rate
@@ -49,13 +49,10 @@ class GeneticAlgorithm(object):
         self.float_bias                  = float_bias
         self.nr_of_crossovers            = nr_of_crossovers
         self.f_crossOver                 = self._crossOver
-        modes                            = {'fitness' : self._fitness_roulette, 
-                                            'rank'    : self._rank_roulette}
-        self.f_roulette                  = modes[roulette_mode]
-        
+        self.f_roulette                  = self._fitness_roulette
+
         self.mean_diversity = []
         self.mean_deviation = []
-
 
         # If the mode is set to float, a single nr is a gene.
         if mode == 'float' and gene_length > 1:
@@ -82,6 +79,11 @@ class GeneticAlgorithm(object):
         else:
             self.progenitor = None
 
+        roulette_modes = {'fitness' : self._fitness_roulette,
+                          'rank'    : self._rank_roulette}
+
+        self.f_roulette = roulette_modes[roulette_mode]
+
         # Set the mode, generation counter and init first population.
         self.mode                      = mode
         self.generation_nr = 0
@@ -91,27 +93,33 @@ class GeneticAlgorithm(object):
         # The cycle function is called externally when a population has been suitably assesed for fitness.
         # It takes the current population and their (externally) assigned fitness to create
         # a new population.
+        # Create a new population;
         
         # keep track of the diversity of the current population:
         m, sigma = self._get_diversity()
         self.mean_diversity.append(m)
         self.mean_deviation.append(sigma)
         
-        # Create a new population;
         newGeneration = Generation(self.pop_size)
         # Select pairs in the population and mate them.
         for ind in range(0,self.pop_size,2):
-            chromo1 = self._roulette()
-            chromo2 = self._roulette()
-            # If the same individual is chosen twice, perform this step until 
-            # two different ones are found.
-            if self._is_same_genotype(chromo1, chromo2):
-                while self._is_same_genotype(chromo1, chromo2):
-                    chromo1 = self._roulette()
-                    chromo2 = self._roulette()
+            chromo1, index1 = self._roulette()
+            chromo2, index2 = self._roulette()
+            # If the same individual is chosen twice, perform this step until
+            # two different ones are found, and also prevent incest
+            if self._is_same_genotype(chromo1, chromo2) or self._are_of_same_parents(index1, index2):
+                # If the set of chromos is identical, or if parents are shared, loop until a set is found
+                # which satisfies a healthy condition
+                while self._is_same_genotype(chromo1, chromo2) and self._are_of_same_parents(index1, index2):
+                    chromo1, index1 = self._roulette()
+                    chromo2, index2 = self._roulette()
+
             offspring1, offspring2 = self._mate(chromo1,chromo2)
             newGeneration.individuals.append(offspring1)
             newGeneration.individuals.append(offspring2)
+            # both chromos have the same parents
+            newGeneration.lineage.append((index1, index2))
+            newGeneration.lineage.append((index1, index2))
         # If elitism is true, the fittest pair of individuals go through to the next
         # generation at a random index of the population.
         if self.elitism:
@@ -228,17 +236,17 @@ class GeneticAlgorithm(object):
         return clone(self.history[self.generation_nr].individuals[index1]), clone(self.history[self.generation_nr].individuals[index2])
 
     def _roulette(self):
-        return self.f_roulette()
-        
+        chromo, index = self.f_roulette()
+        return chromo, index
+
     def _rank_roulette(self):
+        sc,sf,si = self.history[self.generation_nr].sort_by_rank()
         total_rank = 0.5*(self.pop_size**2 + self.pop_size)
-        sorted_chromos, sorted_fitness = self.history[self.generation_nr].sort_by_rank()
         slider = np.random.rand()*total_rank
-        # solve quadratic equation to equate the slider to an index of the rank-sorted generation
-        n = int(ceil((-1.0 + sqrt(1.0 + 8.0*slider))/2.0) - 1)
-        chromo = clone(sorted_chromos[n])
-        return chromo
-        
+        index = int(ceil((-1.0 + sqrt(1.0 + 8.0*slider))/2.0) - 1)
+        chromo = sc[index]
+        return chromo, si[index]
+
     def _fitness_roulette(self):
         # A function to select individuals in a generation fro the mating process.
         # The selection is done according to the fitness and a stochastic parameter.
@@ -253,18 +261,10 @@ class GeneticAlgorithm(object):
                 found_chromo = True
                 break
         if found_chromo:
-            return chromo
+            return chromo, chrNr
         else:
             raise Exception("Could not find chromosome in roulette.")
-            
-    def _is_same_genotype(self, chromo1, chromo2):
-        is_same = True
-        for g1, g2 in zip(chromo1, chromo2):
-            if g1 != g2:
-                is_same = False
-                break
-        return is_same
-        
+
     def _get_average_chromosome(self):
         av_chromo = np.zeros(self.nr_of_genes)
         for chromo, nr in self.individuals():
@@ -303,6 +303,23 @@ class GeneticAlgorithm(object):
             switch_array[i] = switch
         return random_indices, switch_array
 
+    def _is_same_genotype(self, chromo1, chromo2):
+        is_same = True
+        for g1, g2 in zip(chromo1, chromo2):
+            if g1 != g2:
+                is_same = False
+                break
+        return is_same
+
+    def _are_of_same_parents(self, index1, index2):
+        are_same = True
+        # if one of the parents of the chosen chromos is similar
+        parents1 = self.history[self.generation_nr].lineage[index1]
+        parents2 = self.history[self.generation_nr].lineage[index2]
+        if len(np.unique([parents1, parents2])) == 4:
+            are_same = False
+        return are_same
+
     def individuals(self):
         for individualNr in range(self.pop_size):
             yield self.individual(individualNr), individualNr
@@ -311,11 +328,55 @@ class GeneticAlgorithm(object):
         option = 'a'
         if overwrite:
             option = 'w'
+
         with open(file_name, option) as f:
             f.write('\n')
             f.write(chromo_name + ' = ')
-            f.write(str(list(chromo))+'\n')
+            string = '[ '
+            for genenr in range(len(chromo)-1):
+                string += str(chromo[genenr])
+                string += ', '
+            string += str(chromo[-1])
+            string += ' ]'
+            f.write(string+'\n')
 
+    def save_generation_to_file(self):
+        file_name = 'generation_store.py'
+        fitness = self.history[self.generation_nr].fitness
+        chromos = self.history[self.generation_nr].individuals
+
+        fitstring    = []
+        chromostring = []
+
+        fitstring.append('fitness = [ ')
+        for ind in range(self.pop_size-1):
+            fitstring.append(str(fitness[ind]))
+            fitstring.append(', ')
+        fitstring.append(str(fitness[-1]))
+        fitstring.append(' ]')
+
+        chromostring.append('chromosomes = [ ')
+        for chromonr in range(self.pop_size):
+            chromostring.append('[ ')
+            for genenr in range(self.nr_of_genes-1):
+                chromostring.append(str(chromos[chromonr][genenr]))
+                chromostring.append(', ')
+            chromostring.append(str(chromos[chromonr][-1]))
+            chromostring.append(' ]')
+            if chromonr != self.pop_size - 1:
+                chromostring.append(', ')
+        chromostring.append(' ]')
+
+        with open(file_name, 'w') as f:
+            f.write(''.join(fitstring))
+            f.write('\n\n')
+            f.write(''.join(chromostring))
+
+    def load_generation(self):
+        import generation_store as gs
+        self.history[-1].fitness = gs.fitness
+        self.history[-1].individuals = gs.chromosomes
+        self.cycle()
 
 class Generation(object):
 
@@ -325,18 +386,17 @@ class Generation(object):
         # The fitness list lists the fitnesses for the individuals. These are assigned externally.
         self.individuals = []
         self.fitness = []
+        self.lineage = []
         for i in range(size):
             self.fitness.append(0.0)
-            
-    def iterator(self):
-        for i,f in zip(self.individuals, self.fitness):
-            yield i, f
-            
+            self.lineage.append((-i,-i))
+
     def sort_by_rank(self):
-        sorted_fitness = []
-        sorted_chromos = []
-        sorted_indices = np.argsort(self.fitness)
-        for i in sorted_indices:
-            sorted_fitness.append(self.fitness[i])
-            sorted_chromos.append(self.individuals[i])
-        return sorted_chromos, sorted_fitness
+        fitness_sorted = []
+        chromos_sorted = []
+        indices = np.argsort(self.fitness)
+        for index in indices:
+            fitness_sorted.append(self.fitness[index])
+            chromos_sorted.append(self.individuals[index])
+
+        return chromos_sorted, fitness_sorted, indices
