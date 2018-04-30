@@ -35,7 +35,8 @@ class GeneticAlgorithm(object):
                  nr_of_crossovers = 1,                  # The amount of crossover points when crossing over.
                  crossover_mode = 'fixed',              # Whether fixed or uniform crossover is used
                  progenitor = None,                     # The seed chromo, if any
-                 roulette_mode = 'fitness'):
+                 roulette_mode = 'fitness',             # The mode for selecting the fittest individuals
+                 random_distribution = 'normal'):
 
         self.crossover_rate              = crossover_rate
         self.mutation_rate               = mutation_rate
@@ -50,6 +51,7 @@ class GeneticAlgorithm(object):
         self.nr_of_crossovers            = nr_of_crossovers
         self.f_crossOver                 = self._crossOver
         self.f_roulette                  = self._fitness_roulette
+        self.random_distribution         = random_distribution
 
         self.mean_diversity = []
         self.mean_deviation = []
@@ -287,7 +289,12 @@ class GeneticAlgorithm(object):
 
     def _generateRandomFloats(self, length, max_range, bias):
         # Helper for the initialization of the first generation.
-        return np.random.randn(length) * float(max_range) + float(bias)
+        if self.random_distribution == 'normal':
+            return np.random.randn(length) * float(max_range) + float(bias)
+            
+        if self.random_distribution == 'uniform':
+            return np.random.uniform(low = -max_range, high = max_range, size = length) + float(bias)
+            
 
     def _generateRandomByte(self, length):
         # Helper for the initialization of the first generation.
